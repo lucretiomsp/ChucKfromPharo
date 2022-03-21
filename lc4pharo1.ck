@@ -10,16 +10,51 @@ OscIn oin;
 8000 => oin.port;
 OscMsg msg;
 
+// the acid chugraph
+// you can learn more about chubgraph at:
+/// https://chuck.stanford.edu/extend/#chugraphs
+
+class monoAcid extends Chubgraph
+{
+    SawOsc acid => ADSR env => outlet;
+    
+    // set a default freq and gain and a short envelope
+    0.4 =>acid.gain;
+    220 => acid.freq;
+    (1::ms, 280::ms,0, 140::ms) => env.set;
+    
+    // set the frequency of the synth in MIDI noteNumber
+    fun float setNote(float noteNumber)
+    {
+        Std.mtof(noteNumber) => acid.freq;
+    }
+    
+    // play the synth when it receives a 1.0
+    fun void playNote (float gate)
+    {
+        if (gate == 1.0)
+        { 1 => env.keyOn;}
+        if (gate == 0.0)
+        { 1 => env.keyOff;}
+    }
+}
+
 // the messages
-"/KickGate" => oin.addAddress;
-"/SnareGate" => oin.addAddress; 
-"/ClapGate" => oin.addAddress;
-"/TomGate" => oin.addAddress;
-"/ChGate" => oin.addAddress;
-"/OhGate" => oin.addAddress;
-"/RideGate" => oin.addAddress;
+// you need to register all the messages you want to parse
+// from those received from Pharo
+"/test" => oin.addAddress;
+"/Kick" => oin.addAddress;
+"/Snare" => oin.addAddress; 
+"/Clap" => oin.addAddress;
+"/Tom" => oin.addAddress;
+"/Tom" => oin.addAddress;
+"/Ch" => oin.addAddress;
+"/Oh" => oin.addAddress;
+"/Ride" => oin.addAddress;
+"/Acid" => oin.addAddress;
 
 /// the sounds
+    // the drums
 SndBuf kick => dac;
 SndBuf snare => dac;
 SndBuf clap => dac;
@@ -27,6 +62,10 @@ SndBuf ch => dac;
 SndBuf oh => dac;
 SndBuf tom => dac;
 SndBuf ride => dac;
+  // the synths
+monoAcid mono1 => dac;
+  
+ 
 
 me.dir()+"samples/909bdlong.wav" => kick.read;
 me.dir()+"samples/SD_preda808.aiff" => snare.read;
@@ -45,14 +84,33 @@ oh.samples() => oh.pos;
 tom.samples() => tom.pos;
 ride.samples() => ride.pos;
 
-// convenience function
+
+
+// cnveience function to play mono synths
+fun void playMonoWithOSC(string address, monoAcid synth)
+{
+    if (msg.address == address)
+    {
+        msg.getFloat(0) => synth.setNote;
+        msg.getFloat(1) => synth.playNote;
+    } 
+}
+
+// convenience function to play samples
 fun void playSampleWithOSC(string address, SndBuf snd)
 {
     // if the message is a Gate
-    if (msg.address == address + "Gate")
+    if (msg.address == address)
     {
-        if(msg.getFloat(0) == 1.0)    
+        // the gate is the second argument in the OSC message
+        if(msg.getFloat(1) == 1.0)    
             0 => snd.pos;
+   
+   
+        // convert midiNoteNumber to ratio rate
+        // the noteNumber is the first argument in the OSC message
+        Math.pow(2.0, (msg.getFloat(0) - 60.0) / 12.0) =>snd.rate;
+        
     }
 }
 // here we do the thing
@@ -69,8 +127,9 @@ while (oin.recv(msg) != 0)
     playSampleWithOSC("/Oh", oh);
     playSampleWithOSC("/Tom", tom);
     playSampleWithOSC("/Ride", ride);
+    playMonoWithOSC("/Acid", mono1);
     
-  <<< "KickGate" +"Gate" >>>;
+<<< msg.address , " " , msg.getFloat(0), msg.getFloat(1)>>>;
 }
 
 }

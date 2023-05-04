@@ -1,5 +1,5 @@
 // Domenico Cipriani 2022
-// OSC receiver intended to be programmed on the fly with the LiveCOding Package for Pharo
+// OSC receiver intended to be programmed on the fly with the LiveCoding Package for Pharo
 // https://github.com/lucretiomsp/PharoLiveCoding
 // a basic drum machines and a few synths receiving on port 8000
 
@@ -14,14 +14,17 @@ OscMsg msg;
 // you can learn more about chubgraph at:
 /// https://chuck.stanford.edu/extend/#chugraphs
 
-class monoAcid extends Chubgraph
+class monoAcid extends Chugraph
 {
-    SawOsc acid => ADSR env => outlet;
+    SawOsc acid => ADSR env => LPF filter => outlet;
     
     // set a default freq and gain and a short envelope
     0.4 =>acid.gain;
     220 => acid.freq;
     (1::ms, 280::ms,0, 140::ms) => env.set;
+    //
+    800 => filter.freq;
+    3 => filter.Q; // high resonance!
     
     // set the frequency of the synth in MIDI noteNumber
     fun float setNote(float noteNumber)
@@ -37,21 +40,27 @@ class monoAcid extends Chubgraph
         if (gate == 0.0)
         { 1 => env.keyOff;}
     }
+    
+    fun void setCutoff (float cutoff)
+    {
+        cutoff => filter.freq;
+    }
 }
 
 // the messages
 // you need to register all the messages you want to parse
 // from those received from Pharo
 "/test" => oin.addAddress;
-"/Kick" => oin.addAddress;
-"/Snare" => oin.addAddress; 
-"/Clap" => oin.addAddress;
-"/Tom" => oin.addAddress;
-"/Tom" => oin.addAddress;
-"/Ch" => oin.addAddress;
-"/Oh" => oin.addAddress;
-"/Ride" => oin.addAddress;
-"/Acid" => oin.addAddress;
+"/kick" => oin.addAddress;
+"/snare" => oin.addAddress; 
+"/clap" => oin.addAddress;
+"/tom" => oin.addAddress;
+
+"/ch" => oin.addAddress;
+"/oh" => oin.addAddress;
+"/ride" => oin.addAddress;
+"/acid" => oin.addAddress;
+"/acidCutoff" => oin.addAddress;
 
 /// the sounds
     // the drums
@@ -84,6 +93,9 @@ oh.samples() => oh.pos;
 tom.samples() => tom.pos;
 ride.samples() => ride.pos;
 
+// a little bit of mixing
+0.7 => kick.gain; 0.6 => snare.gain; 0.5 => clap.gain;  0.32 => ch.gain; 0.3 => oh.gain;
+0.26 => tom.gain; 0.37 => ride.gain;
 
 
 // cnveience function to play mono synths
@@ -94,6 +106,10 @@ fun void playMonoWithOSC(string address, monoAcid synth)
         msg.getFloat(0) => synth.setNote;
         msg.getFloat(1) => synth.playNote;
     } 
+    if (msg.address == address+"Cutoff")
+    {
+        msg.getFloat(0) => synth.setCutoff;
+    }
 }
 
 // convenience function to play samples
@@ -120,16 +136,16 @@ while (true)
 // when event(s) received, process them
 while (oin.recv(msg) != 0)
 {
-    playSampleWithOSC("/Kick", kick);
-    playSampleWithOSC("/Snare", snare);
-    playSampleWithOSC("/Clap", clap);
-    playSampleWithOSC("/Ch", ch);
-    playSampleWithOSC("/Oh", oh);
-    playSampleWithOSC("/Tom", tom);
-    playSampleWithOSC("/Ride", ride);
-    playMonoWithOSC("/Acid", mono1);
+    playSampleWithOSC("/kick", kick);
+    playSampleWithOSC("/snare", snare);
+    playSampleWithOSC("/clap", clap);
+    playSampleWithOSC("/ch", ch);
+    playSampleWithOSC("/oh", oh);
+    playSampleWithOSC("/tom", tom);
+    playSampleWithOSC("/ride", ride);
+    playMonoWithOSC("/acid", mono1);
     
-<<< msg.address , " " , msg.getFloat(0), msg.getFloat(1)>>>;
+// <<< msg.address , " " , msg.getFloat(0), msg.getFloat(1)>>>;
 }
 
 }
